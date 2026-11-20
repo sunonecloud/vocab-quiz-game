@@ -158,7 +158,7 @@
 
 <script>
 // ==========================================
-// 1. 圖片與單字卡片庫（key 必須對應下方題庫的 answerKeys）
+// 1. 圖片與單字卡片庫
 // ==========================================
 const cardsLibrary = [
     { key: "house", word: "house", img: "images/house.jpg" },
@@ -191,7 +191,7 @@ const questionBank = [
         multi: false
     },
     {
-        question: "Which home is on the water and has neighbors like fish?",
+        question: "Which home has neighbors like fish?",
         hint: "哪一種房子蓋在水面上，附近的鄰居（neighbor）可能是魚（fish）？",
         answerKeys: ["houseboat"],
         multi: false
@@ -203,7 +203,7 @@ const questionBank = [
         multi: true
     },
     {
-        question: "Which home is often found in the woods near a tree or bird?",
+        question: "Which home is often near a tree or bird?",
         hint: "哪一種小屋常出現在樹林裡，附近常有樹（tree）或鳥（bird）？",
         answerKeys: ["cabin"],
         multi: false
@@ -215,14 +215,26 @@ let score = 0;
 let questions = [];
 let selectedKeys = [];
 
+// 洗牌函式（Fisher-Yates 洗牌，避免排序不均勻）
+function shuffleArray(list) {
+    const arr = [...list];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
 function initGame() {
     score = 0;
     currentLevel = 0;
-    questions = [...questionBank].sort(() => Math.random() - 0.5);
+    questions = shuffleArray(questionBank);
+
     document.getElementById("total-levels").innerText = questions.length;
     document.getElementById("score").innerText = score;
     document.getElementById("quiz-screen").style.display = "block";
     document.getElementById("result-screen").style.display = "none";
+
     loadQuestion();
 }
 
@@ -234,6 +246,7 @@ function loadQuestion() {
 
     selectedKeys = [];
     document.getElementById("level").innerText = currentLevel + 1;
+
     const currentQ = questions[currentLevel];
     document.getElementById("question").innerText = currentQ.question;
 
@@ -248,21 +261,13 @@ function loadQuestion() {
     const submitBtn = document.getElementById("submit-multi-btn");
     submitBtn.style.display = currentQ.multi ? "inline-block" : "none";
 
-    // 確保正確答案一定出現在選項中，再補齊其他卡片（共 4～6 張）
-    const correctCards = cardsLibrary.filter(c => currentQ.answerKeys.includes(c.key));
-    const otherCards = cardsLibrary
-        .filter(c => !currentQ.answerKeys.includes(c.key))
-        .sort(() => Math.random() - 0.5);
+    // 確保正確答案一定在選項中，並從其他卡片補齊
+    const answerList = Array.isArray(currentQ.answerKeys) ? currentQ.answerKeys : [];
+    const correctCards = cardsLibrary.filter(c => answerList.includes(c.key));
+    const otherCards = shuffleArray(cardsLibrary.filter(c => !answerList.includes(c.key)));
 
-    const targetCount = Math.max(4, correctCards.length + 2);
-    const displayCards = [...correctCards, ...otherCards.slice(0, targetCount - correctCards.length)]
-        .sort(() => Math.random() - 0.5);
+    const targetCount = Math.min(cardsLibrary.length, Math.max(4, correctCards.length + 2));
+    const neededOthers = Math.max(0, targetCount - correctCards.length);
+    const displayCards = shuffleArray([...correctCards, ...otherCards.slice(0, neededOthers)]);
 
-    const optionsContainer = document.getElementById("options");
-    optionsContainer.innerHTML = "";
-
-    displayCards.forEach(cardItem => {
-        const cardEl = document.createElement("div");
-        cardEl.className = "card";
-        cardEl.innerHTML = `
-            <img
+    const optionsContainer =
