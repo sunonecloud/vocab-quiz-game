@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>主題單字看圖答題遊戲</title>
+    <title>房屋功能與特徵推理小遊戲</title>
     <style>
         body {
             font-family: Arial, "Microsoft JhengHei", sans-serif;
@@ -19,7 +19,7 @@
             padding: 24px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            max-width: 700px;
+            max-width: 760px;
             width: 100%;
             text-align: center;
         }
@@ -32,10 +32,11 @@
             color: #333;
         }
         .question-box {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
             margin-bottom: 12px;
-            color: #222;
+            color: #1f2937;
+            line-height: 1.4;
         }
         .hint-area {
             margin-bottom: 20px;
@@ -59,13 +60,12 @@
             font-size: 16px;
             color: #0c5460;
             background: #d1ecf1;
-            padding: 6px 12px;
+            padding: 6px 14px;
             border-radius: 8px;
-            display: none;
         }
         .options-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
         }
         .card {
@@ -73,16 +73,20 @@
             border-radius: 10px;
             padding: 10px;
             cursor: pointer;
-            transition: transform 0.15s, border-color 0.15s;
+            transition: transform 0.15s, border-color 0.15s, background-color 0.15s;
             background: #fafafa;
         }
         .card:hover {
             transform: translateY(-3px);
             border-color: #007bff;
         }
+        .card.selected {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
         .card img {
             width: 100%;
-            height: 100px;
+            height: 105px;
             object-fit: cover;
             border-radius: 6px;
             background: #eee;
@@ -92,6 +96,20 @@
             font-weight: bold;
             font-size: 16px;
             color: #333;
+        }
+        .submit-multi-btn {
+            display: none;
+            margin: 18px auto 0;
+            padding: 10px 22px;
+            font-size: 16px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .submit-multi-btn:hover {
+            background: #1d4ed8;
         }
         #result-screen {
             display: none;
@@ -122,13 +140,13 @@
 
         <div class="question-box" id="question">題目載入中...</div>
 
-        <!-- 中文提示區：預設隱藏，點擊按鈕才顯示 -->
         <div class="hint-area">
             <button type="button" class="hint-btn" id="hint-toggle-btn" onclick="toggleHint()">💡 需要中文提示嗎？點我看看</button>
             <div class="hint-text" id="hint-box"></div>
         </div>
 
         <div class="options-grid" id="options"></div>
+        <button type="button" class="submit-multi-btn" id="submit-multi-btn" onclick="checkMultiAnswer()">送出選擇</button>
     </div>
 
     <div id="result-screen">
@@ -140,34 +158,67 @@
 
 <script>
 // ==========================================
-// 未來換主題時，只要修改這個 vocabularyList 陣列即可！
-// img 可以填本地路徑（如 "images/house.jpg"）或圖片網址
+// 1. 圖片與單字卡片庫（key 必須對應下方題庫的 answerKeys）
 // ==========================================
-const vocabularyList = [
-    { word: "house", hint: "一般的房子、住宅", img: "images/house.jpg" },
-    { word: "cabin", hint: "小木屋、林間小屋", img: "images/cabin.jpg" },
-    { word: "apartment", hint: "公寓、大樓套房", img: "images/apartment.jpg" },
-    { word: "motor home", hint: "露營車、行動住宅", img: "images/motor_home.jpg" },
-    { word: "houseboat", hint: "船屋、水上住家", img: "images/houseboat.jpg" },
-    { word: "tree", hint: "樹、樹木", img: "images/tree.jpg" },
-    { word: "bird", hint: "鳥、小鳥", img: "images/bird.jpg" },
-    { word: "fish", hint: "魚", img: "images/fish.jpg" },
-    { word: "neighbor", hint: "鄰居", img: "images/neighbor.jpg" },
-    { word: "different", hint: "不同的", img: "images/different.jpg" },
-    { word: "same", hint: "相同的", img: "images/same.jpg" },
-    { word: "wheel", hint: "輪子、車輪", img: "images/wheel.jpg" },
-    { word: "move", hint: "移動、搬家", img: "images/move.jpg" }
+const cardsLibrary = [
+    { key: "house", word: "house", img: "images/house.jpg" },
+    { key: "cabin", word: "cabin", img: "images/cabin.jpg" },
+    { key: "apartment", word: "apartment", img: "images/apartment.jpg" },
+    { key: "motor home", word: "motor home", img: "images/motor_home.jpg" },
+    { key: "houseboat", word: "houseboat", img: "images/houseboat.jpg" },
+    { key: "tree", word: "tree", img: "images/tree.jpg" },
+    { key: "bird", word: "bird", img: "images/bird.jpg" },
+    { key: "fish", word: "fish", img: "images/fish.jpg" },
+    { key: "neighbor", word: "neighbor", img: "images/neighbor.jpg" },
+    { key: "wheel", word: "wheel", img: "images/wheel.jpg" },
+    { key: "move", word: "move", img: "images/move.jpg" }
+];
+
+// ==========================================
+// 2. 問句題庫：支援單選與多選（multi: true）
+// ==========================================
+const questionBank = [
+    {
+        question: "Which home can be moved from place to place?",
+        hint: "哪一種住家有輪子（wheel），可以帶著走、四處移動（move）？",
+        answerKeys: ["motor home"],
+        multi: false
+    },
+    {
+        question: "Which home usually has more floors?",
+        hint: "哪一種建築物通常有多層樓，住著許多鄰居（neighbor）？",
+        answerKeys: ["apartment"],
+        multi: false
+    },
+    {
+        question: "Which home is on the water and has neighbors like fish?",
+        hint: "哪一種房子蓋在水面上，附近的鄰居（neighbor）可能是魚（fish）？",
+        answerKeys: ["houseboat"],
+        multi: false
+    },
+    {
+        question: "Which two homes can move from place to place? (Select 2)",
+        hint: "找出兩種可以移動位置的住家（提示：一個有輪子，一個在水上）。",
+        answerKeys: ["motor home", "houseboat"],
+        multi: true
+    },
+    {
+        question: "Which home is often found in the woods near a tree or bird?",
+        hint: "哪一種小屋常出現在樹林裡，附近常有樹（tree）或鳥（bird）？",
+        answerKeys: ["cabin"],
+        multi: false
+    }
 ];
 
 let currentLevel = 0;
 let score = 0;
 let questions = [];
-let currentQuestionData = null;
+let selectedKeys = [];
 
 function initGame() {
     score = 0;
     currentLevel = 0;
-    questions = [...vocabularyList].sort(() => Math.random() - 0.5);
+    questions = [...questionBank].sort(() => Math.random() - 0.5);
     document.getElementById("total-levels").innerText = questions.length;
     document.getElementById("score").innerText = score;
     document.getElementById("quiz-screen").style.display = "block";
@@ -181,73 +232,37 @@ function loadQuestion() {
         return;
     }
 
+    selectedKeys = [];
     document.getElementById("level").innerText = currentLevel + 1;
-    currentQuestionData = questions[currentLevel];
-    document.getElementById("question").innerText = `請找出：${currentQuestionData.word}`;
+    const currentQ = questions[currentLevel];
+    document.getElementById("question").innerText = currentQ.question;
 
-    // 每題開始時，將中文提示重設為隱藏狀態
+    // 重設中文提示為隱藏
     const hintBox = document.getElementById("hint-box");
     const hintBtn = document.getElementById("hint-toggle-btn");
     hintBox.style.display = "none";
-    hintBox.innerText = `中文提示：${currentQuestionData.hint}`;
+    hintBox.innerText = `中文提示：${currentQ.hint}`;
     hintBtn.innerText = "💡 需要中文提示嗎？點我看看";
 
-    // 隨機選 1 個正確答案 + 最多 3 個干擾項
-    let choices = [currentQuestionData];
-    let pool = vocabularyList.filter(item => item.word !== currentQuestionData.word);
-    pool.sort(() => Math.random() - 0.5);
-    choices.push(...pool.slice(0, 3));
-    choices.sort(() => Math.random() - 0.5);
+    // 多選題顯示「送出選擇」按鈕
+    const submitBtn = document.getElementById("submit-multi-btn");
+    submitBtn.style.display = currentQ.multi ? "inline-block" : "none";
+
+    // 確保正確答案一定出現在選項中，再補齊其他卡片（共 4～6 張）
+    const correctCards = cardsLibrary.filter(c => currentQ.answerKeys.includes(c.key));
+    const otherCards = cardsLibrary
+        .filter(c => !currentQ.answerKeys.includes(c.key))
+        .sort(() => Math.random() - 0.5);
+
+    const targetCount = Math.max(4, correctCards.length + 2);
+    const displayCards = [...correctCards, ...otherCards.slice(0, targetCount - correctCards.length)]
+        .sort(() => Math.random() - 0.5);
 
     const optionsContainer = document.getElementById("options");
     optionsContainer.innerHTML = "";
 
-    choices.forEach(choice => {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `
-            <img src="${choice.img}" alt="${choice.word}">
-            <div class="word">${choice.word}</div>
-        `;
-        card.onclick = () => checkAnswer(choice.word === currentQuestionData.word);
-        optionsContainer.appendChild(card);
-    });
-}
-
-function toggleHint() {
-    const hintBox = document.getElementById("hint-box");
-    const hintBtn = document.getElementById("hint-toggle-btn");
-    const isHidden = hintBox.style.display === "none";
-
-    if (isHidden) {
-        hintBox.style.display = "inline-block";
-        hintBtn.innerText = "🙈 隱藏中文提示";
-    } else {
-        hintBox.style.display = "none";
-        hintBtn.innerText = "💡 需要中文提示嗎？點我看看";
-    }
-}
-
-function checkAnswer(isCorrect) {
-    if (isCorrect) {
-        score += 10;
-        alert("答對了！🎉 +10 分");
-    } else {
-        alert(`再試試看！這題是「${currentQuestionData.word}」`);
-    }
-    document.getElementById("score").innerText = score;
-    currentLevel++;
-    loadQuestion();
-}
-
-function showResults() {
-    document.getElementById("quiz-screen").style.display = "none";
-    document.getElementById("result-screen").style.display = "block";
-    document.getElementById("final-score").innerText = score;
-}
-
-initGame();
-</script>
-
-</body>
-</html>
+    displayCards.forEach(cardItem => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "card";
+        cardEl.innerHTML = `
+            <img
